@@ -5,6 +5,7 @@ import requests
 import cv2
 from PIL import Image, UnidentifiedImageError
 import streamlit as st
+from datetime import datetime, timedelta, timezone
 
 # ==== your modules (kept as-is) ====
 from weather_colour_check import colour_dict               # expects: dict[str, tuple[int,int,int]]
@@ -33,66 +34,48 @@ def get_color_name(color) -> str:
 
 
 # --- replace these two functions in app.py ---
+ImageFile.LOAD_TRUNCATED_IMAGES = True  # tolerate partial images
 
-from datetime import datetime, timedelta, timezone
-from PIL import ImageFile
-ImageFile.LOAD_TRUNCATED_IMAGES = True  # tolerate partial images from the wire
+def round_down_to_5min(dt: datetime) -> datetime:
+    """Return dt rounded down to the nearest 5-minute mark."""
+    minute = (dt.minute // 5) * 5
+    return dt.replace(minute=minute, second=0, microsecond=0)
 
-def build_radar_url_and_time(ts: datetime) -> Tuple[str, str]:
-    """
-    Build the weather.gov.sg 70km dBR radar URL for a given UTC+8 timestamp.
-    The filename uses yyyyMMddHHmm0000 (with mm as minute, zero-padded).
-    """
-    # Make sure we work in local SG time (UTC+8)
+def build_radar_url_and_time(ts: datetime) -> tuple[str, str]:
+    """Construct the radar PNG URL for a given UTC+8 timestamp."""
     sg = timezone(timedelta(hours=8))
     ts = ts.astimezone(sg)
+    ts = round_down_to_5min(ts)  # <-- round down to nearest 5 min
 
-    year_now  = ts.strftime("%Y")
-    month_now = ts.strftime("%m")
-    day_now   = ts.strftime("%d")
-    hour_now  = ts.strftime("%H")
-    minute    = ts.strftime("%M")           # e.g. "07", "12", etc.
+    year  = ts.strftime("%Y")
+    month = ts.strftime("%m")
+    day   = ts.strftime("%d")
+    hour  = ts.strftime("%H")
+    minute= ts.strftime("%M")
 
-    # The site hosts PNGs under HTTPS and v2 path
-    # Example: https://www.weather.gov.sg/files/rainarea/50km/v2/dpsri_70km_2025102613070000dBR.dpsri.png
     url = (
         "https://www.weather.gov.sg/files/rainarea/50km/v2/"
-        f"dpsri_70km_{year_now}{month_now}{day_now}{hour_now}{minute}0000dBR.dpsri.png"
+        f"dpsri_70km_{year}{month}{day}{hour}{minute}0000dBR.dpsri.png"
     )
-    image_time = f"{year_now}-{month_now}-{day_now} {hour_now}:{minute}"
+    image_time = ts.strftime("%Y-%m-%d %H:%M")
     return url, image_time
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _download_image_bytes(url: str) -> bytes:
     headers = {
-        # Some CDNs block default python UA; a browsery UA avoids 403/5xx HTML pages
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                      "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-        # weather.gov.sg sometimes expects a same-site referer
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         "Referer": "https://www.weather.gov.sg/",
         "Accept": "image/*,*/*;q=0.8",
     }
     r = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
     r.raise_for_status()
-
-    ct = (r.headers.get("Content-Type") or "").lower()
-    if "image" not in ct:
-        # The “image” is likely HTML text (403/redirect/login). Bubble up a helpful error.
-        snippet = r.content[:200].decode("utf-8", errors="ignore")
-        raise ValueError(f"Non-image response ({ct}). First bytes: {snippet!r}")
-
-    if not r.content:
-        raise ValueError("Downloaded 0 bytes.")
-
+    if "image" not in (r.headers.get("Content-Type") or "").lower():
+        raise ValueError("Non-image response.")
     return r.content
 
-def fetch_radar_image() -> Tuple[Image.Image, str]:
-    """
-    Try the current timestamp, then walk back in 5-minute steps (up to 4 tries)
-    to survive minor publication delays. Cache last-good frame in session.
-    """
-    # Start from 'now' in SG time; radar is typically 5-minute cadence
-    sg_now = datetime.now(timezone(timedelta(hours=8)))
+def fetch_radar_image() -> tuple[Image.Image, str]:
+    """Try the rounded-down time first, then walk back 5 min steps if needed."""
+    sg_now = round_down_to_5min(datetime.now(timezone(timedelta(hours=8))))
     attempts = 4  # now, -5m, -10m, -15m
 
     last_error = None
@@ -102,7 +85,6 @@ def fetch_radar_image() -> Tuple[Image.Image, str]:
         try:
             data = _download_image_bytes(url)
             img = Image.open(io.BytesIO(data)).convert("RGBA")
-
             st.session_state["previous_frame"] = data
             st.session_state["previous_time"] = image_time
             return img, image_time
@@ -110,12 +92,12 @@ def fetch_radar_image() -> Tuple[Image.Image, str]:
             last_error = e
             continue
 
-    # Fallback to cached frame if available
-    if "previous_frame" in st.session_state and st.session_state["previous_frame"]:
+    # fallback
+    if st.session_state.get("previous_frame"):
         img = Image.open(io.BytesIO(st.session_state["previous_frame"])).convert("RGBA")
-        return img, st.session_state.get("previous_time", "Unknown time (cached)")
+        return img, st.session_state.get("previous_time", "Unknown (cached)")
 
-    raise RuntimeError(f"No radar frame available (tried {attempts} steps). Last error: {last_error}")
+    raise RuntimeError(f"No radar frame found (last error: {last_error})")
 
 
 def classify_nowcast_by_grid(weather_image: Image.Image) -> Dict[str, str]:
@@ -274,6 +256,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
