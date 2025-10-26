@@ -32,40 +32,90 @@ def get_color_name(color) -> str:
     return diffs[0][1]
 
 
-def build_radar_url_and_time() -> Tuple[str, str]:
+# --- replace these two functions in app.py ---
+
+from datetime import datetime, timedelta, timezone
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True  # tolerate partial images from the wire
+
+def build_radar_url_and_time(ts: datetime) -> Tuple[str, str]:
     """
-    Recreate your filename pattern from weather.gov.sg based on get_time.get_time().
+    Build the weather.gov.sg 70km dBR radar URL for a given UTC+8 timestamp.
+    The filename uses yyyyMMddHHmm0000 (with mm as minute, zero-padded).
     """
-    year_now, month_now, day_now, hour_now, minute_split = get_time.get_time()
+    # Make sure we work in local SG time (UTC+8)
+    sg = timezone(timedelta(hours=8))
+    ts = ts.astimezone(sg)
+
+    year_now  = ts.strftime("%Y")
+    month_now = ts.strftime("%m")
+    day_now   = ts.strftime("%d")
+    hour_now  = ts.strftime("%H")
+    minute    = ts.strftime("%M")           # e.g. "07", "12", etc.
+
+    # The site hosts PNGs under HTTPS and v2 path
+    # Example: https://www.weather.gov.sg/files/rainarea/50km/v2/dpsri_70km_2025102613070000dBR.dpsri.png
     url = (
-        "http://www.weather.gov.sg/files/rainarea/50km/v2/"
-        f"dpsri_70km_{year_now}{month_now}{day_now}{hour_now}{minute_split[1]}{minute_split[0]}0000dBR.dpsri.png"
+        "https://www.weather.gov.sg/files/rainarea/50km/v2/"
+        f"dpsri_70km_{year_now}{month_now}{day_now}{hour_now}{minute}0000dBR.dpsri.png"
     )
-    image_time = f"{year_now}-{month_now}-{day_now} {hour_now}:{minute_split[1]}{minute_split[0]}"
+    image_time = f"{year_now}-{month_now}-{day_now} {hour_now}:{minute}"
     return url, image_time
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _download_image_bytes(url: str) -> bytes:
+    headers = {
+        # Some CDNs block default python UA; a browsery UA avoids 403/5xx HTML pages
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        # weather.gov.sg sometimes expects a same-site referer
+        "Referer": "https://www.weather.gov.sg/",
+        "Accept": "image/*,*/*;q=0.8",
+    }
+    r = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+    r.raise_for_status()
+
+    ct = (r.headers.get("Content-Type") or "").lower()
+    if "image" not in ct:
+        # The “image” is likely HTML text (403/redirect/login). Bubble up a helpful error.
+        snippet = r.content[:200].decode("utf-8", errors="ignore")
+        raise ValueError(f"Non-image response ({ct}). First bytes: {snippet!r}")
+
+    if not r.content:
+        raise ValueError("Downloaded 0 bytes.")
+
+    return r.content
 
 def fetch_radar_image() -> Tuple[Image.Image, str]:
     """
-    Fetch radar image. If the latest frame fails to open, fall back to the previous
-    successful image kept in session state.
+    Try the current timestamp, then walk back in 5-minute steps (up to 4 tries)
+    to survive minor publication delays. Cache last-good frame in session.
     """
-    url, image_time = build_radar_url_and_time()
-    try:
-        resp = requests.get(url, timeout=12)
-        resp.raise_for_status()
-        img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-        # Keep last successful frame in session (acts like your previous_radar_image.png)
-        st.session_state["previous_frame"] = resp.content
-        st.session_state["previous_time"] = image_time
-        return img, image_time
-    except (requests.RequestException, UnidentifiedImageError, OSError):
-        # Fallback to last good frame
-        if "previous_frame" in st.session_state:
-            img = Image.open(io.BytesIO(st.session_state["previous_frame"])).convert("RGBA")
-            return img, st.session_state.get("previous_time", "Unknown time (cached)")
-        else:
-            # As a last resort, raise a clean error for the UI
-            raise RuntimeError("No radar frame available yet (network/cache empty).")
+    # Start from 'now' in SG time; radar is typically 5-minute cadence
+    sg_now = datetime.now(timezone(timedelta(hours=8)))
+    attempts = 4  # now, -5m, -10m, -15m
+
+    last_error = None
+    for i in range(attempts):
+        ts = sg_now - timedelta(minutes=5 * i)
+        url, image_time = build_radar_url_and_time(ts)
+        try:
+            data = _download_image_bytes(url)
+            img = Image.open(io.BytesIO(data)).convert("RGBA")
+
+            st.session_state["previous_frame"] = data
+            st.session_state["previous_time"] = image_time
+            return img, image_time
+        except Exception as e:
+            last_error = e
+            continue
+
+    # Fallback to cached frame if available
+    if "previous_frame" in st.session_state and st.session_state["previous_frame"]:
+        img = Image.open(io.BytesIO(st.session_state["previous_frame"])).convert("RGBA")
+        return img, st.session_state.get("previous_time", "Unknown time (cached)")
+
+    raise RuntimeError(f"No radar frame available (tried {attempts} steps). Last error: {last_error}")
 
 
 def classify_nowcast_by_grid(weather_image: Image.Image) -> Dict[str, str]:
@@ -224,6 +274,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
