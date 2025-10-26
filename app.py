@@ -1,7 +1,7 @@
 # app.py
 import io
 from typing import Dict, List, Tuple
-
+import cv2
 import requests
 from PIL import Image, UnidentifiedImageError
 import streamlit as st

@@ -1,6 +1,5 @@
 import numpy as np
 from PIL import Image
-import cv2
 
 
 def location_grids(weather_image):
