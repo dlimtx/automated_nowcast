@@ -175,7 +175,7 @@ def main():
                 image_time = st.session_state.get("previous_time", "Unknown")
             st.image(overlay, caption=f"Radar time: {image_time}", use_container_width=True)
         except Exception as e:
-            st.error(f"Could not load radar image. {e} {image_time}")
+            st.error(f"Could not load radar image. {e}")
             return
 
     # Classify & show nowcast
@@ -224,6 +224,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
