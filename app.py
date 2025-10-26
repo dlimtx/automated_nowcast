@@ -2,6 +2,7 @@
 import io
 from typing import Dict, List, Tuple
 import requests
+import cv2
 from PIL import Image, UnidentifiedImageError
 import streamlit as st
 
@@ -223,4 +224,5 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
