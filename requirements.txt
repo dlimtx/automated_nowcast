@@ -2,7 +2,7 @@ streamlit>=1.38
 requests
 pillow
 pandas
-opencv-python
+opencv-python-headless
 # optional convenience for auto-refresh widget (we try this first, then fall back)
 streamlit-autorefresh
 # your own modules must be importable:
