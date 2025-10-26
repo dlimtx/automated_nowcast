@@ -1,1 +1,11 @@
 streamlit>=1.38
+requests
+pillow
+pandas
+# optional convenience for auto-refresh widget (we try this first, then fall back)
+streamlit-autorefresh
+# your own modules must be importable:
+# weather_colour_check
+# location_grid
+# nowcast_weather
+# get_time
