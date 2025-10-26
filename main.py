@@ -3,8 +3,8 @@ from PIL import Image, UnidentifiedImageError
 from weather_colour_check import colour_dict
 from location_grid import location_grids
 from nowcast_weather import nowcast_weather
-from alarm_ui import Alarm_UI
-# from alarm_ui_mpl import Alarm_UI_MPL
+# from alarm_ui import Alarm_UI
+from alarm_ui_mpl import Alarm_UI_MPL
 import get_time
 
 
@@ -104,7 +104,7 @@ while True:
     print("Nowcast Automating...")
 
     # show image and provide an alarm if there is weather
-    weather_alarm = Alarm_UI(weather_nowcast)
+    weather_alarm = Alarm_UI_MPL(weather_nowcast)
 
     # # produce nowcast image
     # nowcast_weather(weather_nowcast, image_time)
@@ -114,3 +114,4 @@ while True:
     # cv2.imshow("Window", nowcast_image)
     # weather_alarm = Alarm_UI(weather_nowcast)
     # cv2.destroyAllWindows()
+
