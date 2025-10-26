@@ -2,7 +2,7 @@ import datetime as dt
 
 
 def get_time():
-    time_now = dt.datetime.now() + dt.timedelta(hours=8)
+    time_now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
     print(time_now)
     year_now = str(time_now.year)
     month_now = time_now.month
@@ -54,5 +54,6 @@ def get_time():
 
     time_list = [year_now, month_now, day_now, hour_now, minute_split]
     return time_list
+
 
 
