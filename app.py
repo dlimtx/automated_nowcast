@@ -3,7 +3,7 @@ import io
 from typing import Dict, List, Tuple
 import requests
 import cv2
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageFile, UnidentifiedImageError
 import streamlit as st
 from datetime import datetime, timedelta, timezone
 
@@ -256,6 +256,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
