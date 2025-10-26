@@ -1,6 +1,6 @@
 import numpy as np
 from PIL import Image
-
+import cv2
 
 def location_grids(weather_image):
     # overlay onto SG map
@@ -577,3 +577,4 @@ def location_grids(weather_image):
     neighborhood_grids["Sembawang"] = sembawang_grids
 
     return neighborhood_grids
+
