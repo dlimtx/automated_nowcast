@@ -192,7 +192,6 @@ def render_alarm_panel(nowcast: Dict[str, str]) -> None:
 def main():
     st.title("Singapore Rain Nowcast (Radar-based) 🌧️")
     st.caption("Wrap of automated nowcast for Streamlit with auto-refresh, caching, and UI alarms.")
-    st.session_state["run_id"] = st.session_state.get("run_id", 0) + 1
 
     # Sidebar controls
     with st.sidebar:
@@ -207,9 +206,7 @@ def main():
     
         # Stop button to silence ongoing alarm
         if st.button("Stop alarm"):
-            st.session_state["alarm_active"] = False
-            # Suppress re-arming through the *next* rerun
-            st.session_state["suppress_rearm_until_run"] = st.session_state["run_id"] + 1
+            st.session_state["not_stopped"] = False
             st.toast("🔕 Alarm stopped (will stay silent until after the next refresh)")
     
         # Auto refresh (if enabled)
@@ -256,7 +253,7 @@ def main():
                 # Init session flags once
         st.session_state.setdefault("alarm_active", False)
         st.session_state.setdefault("was_raining", False)
-        st.session_state.setdefault("suppress_rearm_until_run", 0)
+        st.session_state.setdefault("not_stopped", True)
         
         # Detect rain this run
         raining_now = any(c in ("Showers", "Thundery Showers") for c in nowcast.values())
@@ -272,7 +269,7 @@ def main():
             st.toast("🔊 Rain detected — alarm armed", icon="🌧️")
         
         # If alarm is active, render looping audio every rerun until stopped
-        if st.session_state["alarm_active"] and st.session_state.get("alarm_enabled"):
+        if st.session_state["alarm_active"] and st.session_state.get("alarm_enabled") and st.session_state.get("not_stopped"):
             try:
                 src = file_to_data_url("RingIn.wav")  # or use a hosted URL
                 render_alarm_audio(src)
@@ -352,6 +349,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
