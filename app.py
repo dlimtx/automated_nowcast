@@ -197,126 +197,126 @@ def main():
     st.caption("Wrap of automated nowcast for Streamlit with auto-refresh, caching, and UI alarms.")
 
     # Sidebar controls
-with st.sidebar:
-    st.header("Controls")
-    refresh_secs = st.slider("Auto-refresh (seconds)", 0, 600, 300)
-    manual = st.button("Fetch now")
-    st.divider()
-
-    # 🔊 user consent for autoplay
-    st.checkbox("Enable alarm sound", key="alarm_enabled", help="Needed so your browser allows audio autoplay.")
-
-    # optional test button (counts as a gesture and proves audio works)
-    if st.button("Test alarm"):
-        try:
-            src = file_to_data_url("alarm.wav")
-            play_alarm(src)
-        except Exception as e:
-            st.error(f"Test failed: {e}")
-
-    # Auto refresh (if enabled)
-    if refresh_secs > 0:
-        try:
-            from streamlit_autorefresh import st_autorefresh
-            st_autorefresh(interval=refresh_secs * 1000, key="auto-refresh")
-        except ImportError:
-            st.info(
-                "Auto-refresh requires the package 'streamlit-autorefresh'. Run `pip install streamlit-autorefresh`.")
-
-    # Columns for layout
-    col1, col2 = st.columns([1.2, 1])
-
-    # Prepare base image
-    base_img = Image.open("base-sg.png").convert("RGBA")
-
-    # Fetch & render radar
-    with col1:
-        st.subheader("Latest Radar Frame")
-        try:
-            if manual or refresh_secs > 0 or "previous_frame" not in st.session_state:
-                image, image_time = fetch_radar_image()
-                img_for_overlay = image.resize(base_img.size, Image.BILINEAR)
-                overlay = base_img.copy()
-                overlay.alpha_composite(img_for_overlay)
-            else:
-                # Use cached previous frame to avoid repeated network on first paint
-                image = Image.open(io.BytesIO(st.session_state["previous_frame"])).convert("RGBA")
-                img_for_overlay = image.resize(base_img.size, Image.BILINEAR)
-                overlay = base_img.copy()
-                overlay.alpha_composite(img_for_overlay)
-                image_time = st.session_state.get("previous_time", "Unknown")
-            st.image(overlay, caption=f"Radar time: {image_time}", use_container_width=True)
-        except Exception as e:
-            st.error(f"Could not load radar image. {e}")
-            return
-
-    # Classify & show nowcast
-    with col2:
-        st.subheader("Nowcast (by grid)")
-        nowcast = classify_nowcast_by_grid(image)
-
-                # ===== Alarm logic =====
-        raining_now = is_rain_detected(nowcast)
-        was_raining = st.session_state.get("was_raining", False)
-        
-        # Decide when to ring:
-        # - ring on transition (no rain -> rain), OR
-        # - ring every refresh while raining if you prefer (toggle the condition below)
-        should_ring = (not was_raining and raining_now)  # transition-only
-        # should_ring = raining_now  # <-- uncomment to ring every refresh while raining
-        
-        if raining_now:
-            st.warning("Rain detected in one or more regions.")
-        else:
-            st.info("No rain detected in monitored grids.")
-        
-        # Play sound if allowed by user + we should ring
-        if st.session_state.get("alarm_enabled") and should_ring:
+    with st.sidebar:
+        st.header("Controls")
+        refresh_secs = st.slider("Auto-refresh (seconds)", 0, 600, 300)
+        manual = st.button("Fetch now")
+        st.divider()
+    
+        # 🔊 user consent for autoplay
+        st.checkbox("Enable alarm sound", key="alarm_enabled", help="Needed so your browser allows audio autoplay.")
+    
+        # optional test button (counts as a gesture and proves audio works)
+        if st.button("Test alarm"):
             try:
-                # Prefer an embedded data: URL so it works on Streamlit Cloud
-                src = file_to_data_url("RingIn.wav")  # or host at /alarm.wav and use plain "alarm.wav"
+                src = file_to_data_url("alarm.wav")
                 play_alarm(src)
-                st.toast("🔊 Alarm rang (rain detected).")
             except Exception as e:
-                st.error(f"Alarm sound error: {e}")
-        
-        # remember state for next refresh
-        st.session_state["was_raining"] = raining_now
-        
-        # Optional: write out nowcast overlay/asset using your function
-        try:
-            _out = nowcast_weather(nowcast, image_time)  # if it saves an image, great
-        except Exception:
-            # non-fatal: your function might save to disk; ignore if unavailable in cloud
-            _out = None
-
-        if _out:
+                st.error(f"Test failed: {e}")
+    
+        # Auto refresh (if enabled)
+        if refresh_secs > 0:
             try:
-                if isinstance(_out, str):
-                    st.image(_out, caption="Generated Nowcast Overlay", use_container_width=True)
-                elif isinstance(_out, Image.Image):
-                    st.image(_out, caption="Generated Nowcast Overlay", use_container_width=True)
+                from streamlit_autorefresh import st_autorefresh
+                st_autorefresh(interval=refresh_secs * 1000, key="auto-refresh")
+            except ImportError:
+                st.info(
+                    "Auto-refresh requires the package 'streamlit-autorefresh'. Run `pip install streamlit-autorefresh`.")
+    
+        # Columns for layout
+        col1, col2 = st.columns([1.2, 1])
+    
+        # Prepare base image
+        base_img = Image.open("base-sg.png").convert("RGBA")
+    
+        # Fetch & render radar
+        with col1:
+            st.subheader("Latest Radar Frame")
+            try:
+                if manual or refresh_secs > 0 or "previous_frame" not in st.session_state:
+                    image, image_time = fetch_radar_image()
+                    img_for_overlay = image.resize(base_img.size, Image.BILINEAR)
+                    overlay = base_img.copy()
+                    overlay.alpha_composite(img_for_overlay)
+                else:
+                    # Use cached previous frame to avoid repeated network on first paint
+                    image = Image.open(io.BytesIO(st.session_state["previous_frame"])).convert("RGBA")
+                    img_for_overlay = image.resize(base_img.size, Image.BILINEAR)
+                    overlay = base_img.copy()
+                    overlay.alpha_composite(img_for_overlay)
+                    image_time = st.session_state.get("previous_time", "Unknown")
+                st.image(overlay, caption=f"Radar time: {image_time}", use_container_width=True)
+            except Exception as e:
+                st.error(f"Could not load radar image. {e}")
+                return
+    
+        # Classify & show nowcast
+        with col2:
+            st.subheader("Nowcast (by grid)")
+            nowcast = classify_nowcast_by_grid(image)
+    
+                    # ===== Alarm logic =====
+            raining_now = is_rain_detected(nowcast)
+            was_raining = st.session_state.get("was_raining", False)
+            
+            # Decide when to ring:
+            # - ring on transition (no rain -> rain), OR
+            # - ring every refresh while raining if you prefer (toggle the condition below)
+            should_ring = (not was_raining and raining_now)  # transition-only
+            # should_ring = raining_now  # <-- uncomment to ring every refresh while raining
+            
+            if raining_now:
+                st.warning("Rain detected in one or more regions.")
+            else:
+                st.info("No rain detected in monitored grids.")
+            
+            # Play sound if allowed by user + we should ring
+            if st.session_state.get("alarm_enabled") and should_ring:
+                try:
+                    # Prefer an embedded data: URL so it works on Streamlit Cloud
+                    src = file_to_data_url("RingIn.wav")  # or host at /alarm.wav and use plain "alarm.wav"
+                    play_alarm(src)
+                    st.toast("🔊 Alarm rang (rain detected).")
+                except Exception as e:
+                    st.error(f"Alarm sound error: {e}")
+            
+            # remember state for next refresh
+            st.session_state["was_raining"] = raining_now
+            
+            # Optional: write out nowcast overlay/asset using your function
+            try:
+                _out = nowcast_weather(nowcast, image_time)  # if it saves an image, great
             except Exception:
-                pass
-
-        # Alarm panel (replacement for Alarm_UI)
-        render_alarm_panel(nowcast)
-
-        # Download nowcast as CSV
-        if nowcast:
-            import pandas as pd
-            df = pd.DataFrame(
-                [{"Location": loc, "Condition": cond} for loc, cond in sorted(nowcast.items())]
-            )
-            st.dataframe(df, use_container_width=True, hide_index=True)
-            st.download_button(
-                "Download nowcast CSV",
-                df.to_csv(index=False).encode(),
-                file_name=f"nowcast_{image_time.replace(':','')}.csv",
-                mime="text/csv"
-            )
-        else:
-            st.info("No locations flagged.")
+                # non-fatal: your function might save to disk; ignore if unavailable in cloud
+                _out = None
+    
+            if _out:
+                try:
+                    if isinstance(_out, str):
+                        st.image(_out, caption="Generated Nowcast Overlay", use_container_width=True)
+                    elif isinstance(_out, Image.Image):
+                        st.image(_out, caption="Generated Nowcast Overlay", use_container_width=True)
+                except Exception:
+                    pass
+    
+            # Alarm panel (replacement for Alarm_UI)
+            render_alarm_panel(nowcast)
+    
+            # Download nowcast as CSV
+            if nowcast:
+                import pandas as pd
+                df = pd.DataFrame(
+                    [{"Location": loc, "Condition": cond} for loc, cond in sorted(nowcast.items())]
+                )
+                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.download_button(
+                    "Download nowcast CSV",
+                    df.to_csv(index=False).encode(),
+                    file_name=f"nowcast_{image_time.replace(':','')}.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.info("No locations flagged.")
 
 
 if __name__ == "__main__":
@@ -324,6 +324,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
