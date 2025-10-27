@@ -26,6 +26,7 @@ def is_rain_detected(nowcast: dict[str, str]) -> bool:
     # any region with Showers / Thundery Showers
     return any(c in ("Showers", "Thundery Showers") for c in nowcast.values())
 
+
 def render_alarm_audio(src: str):
     # Looping audio element; JS ensures immediate play on re-runs.
     components.html(
@@ -258,9 +259,6 @@ def main():
         # Detect rain this run
         raining_now = any(c in ("Showers", "Thundery Showers") for c in nowcast.values())
         was_raining = st.session_state["was_raining"]
-
-        # Only allow re-arming when we've passed the suppression window
-        rearm_allowed = st.session_state["run_id"] > st.session_state.get("suppress_rearm_until_run", 0)
   
         # Decide when to arm the alarm:
         # - Arm on transition dry→rain (recommended), OR use `if raining_now:` to arm any time it’s raining.
@@ -350,6 +348,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
