@@ -5,6 +5,8 @@ import requests
 import cv2
 from PIL import Image, ImageFile, UnidentifiedImageError
 import streamlit as st
+import streamlit.components.v1 as components
+import base64
 from datetime import datetime, timedelta, timezone
 
 # ==== your modules (kept as-is) ====
@@ -20,6 +22,40 @@ st.set_page_config(page_title="SG Rain Nowcast", page_icon="🌧️", layout="wi
 # ========================
 # Helpers from your script
 # ========================
+def is_rain_detected(nowcast: dict[str, str]) -> bool:
+    # any region with Showers / Thundery Showers
+    return any(c in ("Showers", "Thundery Showers") for c in nowcast.values())
+
+def play_alarm(sound_src: str):
+    """
+    Play a short sound using an HTML5 <audio> tag.
+    `sound_src` can be a relative file path ('alarm.wav') or a data: URL.
+    """
+    components.html(
+        f"""
+        <audio autoplay>
+          <source src='{sound_src}'>
+        </audio>
+        """,
+        height=0,
+    )
+
+def file_to_data_url(path: str) -> str:
+    # turn a small wav/mp3 in your repo into a data: URL so it works on cloud
+    mime = "audio/wav" if path.lower().endswith(".wav") else "audio/mpeg"
+    with open(path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("ascii")
+    return f"data:{mime};base64,{b64}"
+
+
+def file_to_data_url(path: str) -> str:
+    # turn a small wav/mp3 in your repo into a data: URL so it works on cloud
+    mime = "audio/wav" if path.lower().endswith(".wav") else "audio/mpeg"
+    with open(path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("ascii")
+    return f"data:{mime};base64,{b64}"
+
+
 def color_difference(color1, color2) -> int:
     """Calculate difference as sum of per-channel absolute differences."""
     return sum(abs(a - b) for a, b in zip(color1, color2))
@@ -161,18 +197,22 @@ def main():
     st.caption("Wrap of automated nowcast for Streamlit with auto-refresh, caching, and UI alarms.")
 
     # Sidebar controls
-    with st.sidebar:
-        st.header("Controls")
-        refresh_secs = st.slider("Auto-refresh (seconds)", min_value=0, max_value=600, value=300,
-                                 help="0 disables auto-refresh. Typical radar cadence is ~5–10 minutes.")
-        manual = st.button("Fetch now")
-        st.divider()
-        st.subheader("About")
-        st.markdown(
-            "- Uses **weather.gov.sg** radar imagery\n"
-            "- Classifies grid colours via your `colour_dict`\n"
-            "- Replaces `Alarm_UI` with a Streamlit alarm panel"
-        )
+with st.sidebar:
+    st.header("Controls")
+    refresh_secs = st.slider("Auto-refresh (seconds)", 0, 600, 300)
+    manual = st.button("Fetch now")
+    st.divider()
+
+    # 🔊 user consent for autoplay
+    st.checkbox("Enable alarm sound", key="alarm_enabled", help="Needed so your browser allows audio autoplay.")
+
+    # optional test button (counts as a gesture and proves audio works)
+    if st.button("Test alarm"):
+        try:
+            src = file_to_data_url("alarm.wav")
+            play_alarm(src)
+        except Exception as e:
+            st.error(f"Test failed: {e}")
 
     # Auto refresh (if enabled)
     if refresh_secs > 0:
@@ -215,6 +255,34 @@ def main():
         st.subheader("Nowcast (by grid)")
         nowcast = classify_nowcast_by_grid(image)
 
+                # ===== Alarm logic =====
+        raining_now = is_rain_detected(nowcast)
+        was_raining = st.session_state.get("was_raining", False)
+        
+        # Decide when to ring:
+        # - ring on transition (no rain -> rain), OR
+        # - ring every refresh while raining if you prefer (toggle the condition below)
+        should_ring = (not was_raining and raining_now)  # transition-only
+        # should_ring = raining_now  # <-- uncomment to ring every refresh while raining
+        
+        if raining_now:
+            st.warning("Rain detected in one or more regions.")
+        else:
+            st.info("No rain detected in monitored grids.")
+        
+        # Play sound if allowed by user + we should ring
+        if st.session_state.get("alarm_enabled") and should_ring:
+            try:
+                # Prefer an embedded data: URL so it works on Streamlit Cloud
+                src = file_to_data_url("RingIn.wav")  # or host at /alarm.wav and use plain "alarm.wav"
+                play_alarm(src)
+                st.toast("🔊 Alarm rang (rain detected).")
+            except Exception as e:
+                st.error(f"Alarm sound error: {e}")
+        
+        # remember state for next refresh
+        st.session_state["was_raining"] = raining_now
+        
         # Optional: write out nowcast overlay/asset using your function
         try:
             _out = nowcast_weather(nowcast, image_time)  # if it saves an image, great
@@ -256,6 +324,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
