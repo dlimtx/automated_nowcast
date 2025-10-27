@@ -262,8 +262,8 @@ def main():
         # Decide when to ring:
         # - ring on transition (no rain -> rain), OR
         # - ring every refresh while raining if you prefer (toggle the condition below)
-        should_ring = (not was_raining and raining_now)  # transition-only
-        # should_ring = raining_now  # <-- uncomment to ring every refresh while raining
+        # should_ring = (not was_raining and raining_now)  # transition-only
+        should_ring = raining_now  # <-- uncomment to ring every refresh while raining
         
         if raining_now:
             st.warning("Rain detected in one or more regions.")
@@ -324,6 +324,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
