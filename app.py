@@ -26,26 +26,23 @@ def is_rain_detected(nowcast: dict[str, str]) -> bool:
     # any region with Showers / Thundery Showers
     return any(c in ("Showers", "Thundery Showers") for c in nowcast.values())
 
-def play_alarm(sound_src: str):
-    """
-    Play a short sound using an HTML5 <audio> tag.
-    `sound_src` can be a relative file path ('alarm.wav') or a data: URL.
-    """
+def render_alarm_audio(src: str):
+    # Looping audio element; JS ensures immediate play on re-runs.
     components.html(
         f"""
-        <audio autoplay>
-          <source src='{sound_src}'>
+        <audio id='alarm' autoplay loop>
+          <source src='{src}'>
         </audio>
+        <script>
+          const a = document.getElementById('alarm');
+          if (a) {{
+            const tryPlay = () => a.play().catch(() => setTimeout(tryPlay, 400));
+            tryPlay();
+          }}
+        </script>
         """,
         height=0,
     )
-
-def file_to_data_url(path: str) -> str:
-    # turn a small wav/mp3 in your repo into a data: URL so it works on cloud
-    mime = "audio/wav" if path.lower().endswith(".wav") else "audio/mpeg"
-    with open(path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode("ascii")
-    return f"data:{mime};base64,{b64}"
 
 
 def file_to_data_url(path: str) -> str:
@@ -201,11 +198,17 @@ def main():
         st.header("Controls")
         refresh_secs = st.slider("Auto-refresh (seconds)", 0, 600, 300)
         manual = st.button("Fetch now")
+    
         st.divider()
+        # 👇 User gesture so browsers allow audio autoplay
+        st.checkbox("Enable alarm sound", key="alarm_enabled",
+                    help="Required by browsers to allow autoplay with audio.")
     
-        # 🔊 user consent for autoplay
-        st.checkbox("Enable alarm sound", key="alarm_enabled", help="Needed so your browser allows audio autoplay.")
-    
+        # Stop button to silence ongoing alarm
+        if st.button("Stop alarm"):
+            st.session_state["alarm_active"] = False
+            st.toast("🔕 Alarm stopped", icon="🔕")
+        
         # optional test button (counts as a gesture and proves audio works)
         if st.button("Test alarm"):
             try:
@@ -255,33 +258,59 @@ def main():
         st.subheader("Nowcast (by grid)")
         nowcast = classify_nowcast_by_grid(image)
 
-                # ===== Alarm logic =====
-        raining_now = is_rain_detected(nowcast)
-        was_raining = st.session_state.get("was_raining", False)
+                # Init session flags once
+        st.session_state.setdefault("alarm_active", False)
+        st.session_state.setdefault("was_raining", False)
         
-        # Decide when to ring:
-        # - ring on transition (no rain -> rain), OR
-        # - ring every refresh while raining if you prefer (toggle the condition below)
-        # should_ring = (not was_raining and raining_now)  # transition-only
-        should_ring = raining_now  # <-- uncomment to ring every refresh while raining
+        # Detect rain this run
+        raining_now = any(c in ("Showers", "Thundery Showers") for c in nowcast.values())
+        was_raining = st.session_state["was_raining"]
         
-        if raining_now:
-            st.warning("Rain detected in one or more regions.")
-        else:
-            st.info("No rain detected in monitored grids.")
+        # Decide when to arm the alarm:
+        # - Arm on transition dry→rain (recommended), OR use `if raining_now:` to arm any time it’s raining.
+        if raining_now and st.session_state.get("alarm_enabled"):
+            st.session_state["alarm_active"] = True
+            st.toast("🔊 Rain detected — alarm armed", icon="🌧️")
         
-        # Play sound if allowed by user + we should ring
-        if st.session_state.get("alarm_enabled") and should_ring:
+        # If alarm is active, render looping audio every rerun until stopped
+        if st.session_state["alarm_active"] and st.session_state.get("alarm_enabled"):
             try:
-                # Prefer an embedded data: URL so it works on Streamlit Cloud
-                src = file_to_data_url("RingIn.wav")  # or host at /alarm.wav and use plain "alarm.wav"
-                play_alarm(src)
-                st.toast("🔊 Alarm rang (rain detected).")
+                src = file_to_data_url("alarm.wav")  # or use a hosted URL
+                render_alarm_audio(src)
+                st.caption("Alarm is **ringing** (looping) — press **Stop alarm** in the sidebar to silence.")
             except Exception as e:
                 st.error(f"Alarm sound error: {e}")
         
-        # remember state for next refresh
+        # Update for next run
         st.session_state["was_raining"] = raining_now
+        
+        #         # ===== Alarm logic =====
+        # raining_now = is_rain_detected(nowcast)
+        # was_raining = st.session_state.get("was_raining", False)
+        
+        # # Decide when to ring:
+        # # - ring on transition (no rain -> rain), OR
+        # # - ring every refresh while raining if you prefer (toggle the condition below)
+        # # should_ring = (not was_raining and raining_now)  # transition-only
+        # should_ring = raining_now  # <-- uncomment to ring every refresh while raining
+        
+        # if raining_now:
+        #     st.warning("Rain detected in one or more regions.")
+        # else:
+        #     st.info("No rain detected in monitored grids.")
+        
+        # # Play sound if allowed by user + we should ring
+        # if st.session_state.get("alarm_enabled") and should_ring:
+        #     try:
+        #         # Prefer an embedded data: URL so it works on Streamlit Cloud
+        #         src = file_to_data_url("RingIn.wav")  # or host at /alarm.wav and use plain "alarm.wav"
+        #         play_alarm(src)
+        #         st.toast("🔊 Alarm rang (rain detected).")
+        #     except Exception as e:
+        #         st.error(f"Alarm sound error: {e}")
+        
+        # # remember state for next refresh
+        # st.session_state["was_raining"] = raining_now
         
         # Optional: write out nowcast overlay/asset using your function
         try:
@@ -324,6 +353,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
