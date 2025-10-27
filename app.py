@@ -192,6 +192,7 @@ def render_alarm_panel(nowcast: Dict[str, str]) -> None:
 def main():
     st.title("Singapore Rain Nowcast (Radar-based) 🌧️")
     st.caption("Wrap of automated nowcast for Streamlit with auto-refresh, caching, and UI alarms.")
+    st.session_state["run_id"] = st.session_state.get("run_id", 0) + 1
 
     # Sidebar controls
     with st.sidebar:
@@ -207,7 +208,9 @@ def main():
         # Stop button to silence ongoing alarm
         if st.button("Stop alarm"):
             st.session_state["alarm_active"] = False
-            st.toast("🔕 Alarm stopped", icon="🔕")
+            # Suppress re-arming through the *next* rerun
+            st.session_state["suppress_rearm_until_run"] = st.session_state["run_id"] + 1
+            st.toast("🔕 Alarm stopped (will stay silent until after the next refresh)")
     
         # Auto refresh (if enabled)
         if refresh_secs > 0:
@@ -253,11 +256,15 @@ def main():
                 # Init session flags once
         st.session_state.setdefault("alarm_active", False)
         st.session_state.setdefault("was_raining", False)
+        st.session_state.setdefault("suppress_rearm_until_run", 0)
         
         # Detect rain this run
         raining_now = any(c in ("Showers", "Thundery Showers") for c in nowcast.values())
         was_raining = st.session_state["was_raining"]
-        
+
+        # Only allow re-arming when we've passed the suppression window
+        rearm_allowed = st.session_state["run_id"] > st.session_state.get("suppress_rearm_until_run", 0)
+  
         # Decide when to arm the alarm:
         # - Arm on transition dry→rain (recommended), OR use `if raining_now:` to arm any time it’s raining.
         if raining_now and st.session_state.get("alarm_enabled"):
@@ -345,6 +352,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
