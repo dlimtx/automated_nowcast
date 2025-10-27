@@ -208,14 +208,6 @@ def main():
         if st.button("Stop alarm"):
             st.session_state["alarm_active"] = False
             st.toast("🔕 Alarm stopped", icon="🔕")
-        
-        # optional test button (counts as a gesture and proves audio works)
-        if st.button("Test alarm"):
-            try:
-                src = file_to_data_url("RingIn.wav")
-                play_alarm(src)
-            except Exception as e:
-                st.error(f"Test failed: {e}")
     
         # Auto refresh (if enabled)
         if refresh_secs > 0:
@@ -353,6 +345,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
