@@ -277,6 +277,7 @@ def main():
         
         # Update for next run
         st.session_state["was_raining"] = raining_now
+        st.session_state["alarm_active"] = False
         st.session_state["not_stopped"] = True
         
         #         # ===== Alarm logic =====
@@ -348,6 +349,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
