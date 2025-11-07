@@ -22,6 +22,13 @@ st.set_page_config(page_title="SG Rain Nowcast", page_icon="🌧️", layout="wi
 # ========================
 # Helpers from your script
 # ========================
+SENS_THRESH = {"High": 1, "Medium": 3, "Low": 5}
+
+def count_rainy_locations(nowcast: Dict[str, str]) -> int:
+    """How many locations report Showers/Thundery Showers."""
+    return sum(1 for c in nowcast.values() if c in ("Showers", "Thundery Showers"))
+
+
 def is_rain_detected(nowcast: dict[str, str]) -> bool:
     # any region with Showers / Thundery Showers
     return any(c in ("Showers", "Thundery Showers") for c in nowcast.values())
@@ -199,12 +206,21 @@ def main():
         st.header("Controls")
         refresh_secs = st.slider("Auto-refresh (seconds)", 0, 600, 300)
         manual = st.button("Fetch now")
-    
         st.divider()
+        
         # 👇 User gesture so browsers allow audio autoplay
         st.checkbox("Enable alarm sound", key="alarm_enabled",
                     help="Required by browsers to allow autoplay with audio.")
-    
+
+        # 🛎️ NEW: Alarm sensitivity slider
+        sensitivity = st.select_slider(
+            "Alarm sensitivity", 
+            options=["High", "Medium", "Low"],
+            value="High",
+            help="High: 1+ rainy locations • Medium: 3+ • Low: 5+"
+            )
+        st.session_state["alarm_threshold"] = SENS_THRESH[sensitivity]
+  
         # Stop button to silence ongoing alarm
         if st.button("Stop alarm"):
             st.session_state["not_stopped"] = False
@@ -257,7 +273,10 @@ def main():
         st.session_state.setdefault("not_stopped", True)
         
         # Detect rain this run
-        raining_now = any(c in ("Showers", "Thundery Showers") for c in nowcast.values())
+        rain_count = count_rainy_locations(nowcast)
+        threshold = st.session_state.get("alarm_threshold", 1)
+        raining_now = rain_count >= threshold
+        # raining_now = any(c in ("Showers", "Thundery Showers") for c in nowcast.values())
         was_raining = st.session_state["was_raining"]
   
         # Decide when to arm the alarm:
@@ -274,6 +293,9 @@ def main():
                 st.caption("Alarm is **ringing** (looping) — press **Stop alarm** in the sidebar to silence.")
             except Exception as e:
                 st.error(f"Alarm sound error: {e}")
+                
+        # Status text
+        st.caption(f"Rainy locations: {rain_count} (threshold {threshold}, {sensitivity} sensitivity)")
         
         # Update for next run
         st.session_state["was_raining"] = raining_now
@@ -349,6 +371,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
