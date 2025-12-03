@@ -22,7 +22,7 @@ st.set_page_config(page_title="SG Rain Nowcast", page_icon="🌧️", layout="wi
 # ========================
 # Helpers from your script
 # ========================
-SENS_THRESH = {"High": 1, "Medium": 3, "Low": 5}
+SENS_THRESH = {"High": 3, "Medium": 5, "Low": 8}
 
 def count_rainy_locations(nowcast: Dict[str, str]) -> int:
     """How many locations report Showers/Thundery Showers."""
@@ -217,7 +217,7 @@ def main():
             "Alarm sensitivity", 
             options=["High", "Medium", "Low"],
             value="High",
-            help="High: 1+ rainy locations • Medium: 3+ • Low: 5+"
+            help="High: 3+ rainy locations • Medium: 5+ • Low: 8+"
             )
         st.session_state["alarm_threshold"] = SENS_THRESH[sensitivity]
   
@@ -371,6 +371,7 @@ if __name__ == "__main__":
     st.session_state.setdefault("previous_frame", None)
     st.session_state.setdefault("previous_time", None)
     main()
+
 
 
 
